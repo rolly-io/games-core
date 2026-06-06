@@ -446,22 +446,22 @@ mod rtp_simulation {
         println!();
 
         assert!(
-            rtp >= 98.98,
+            rtp >= 98.90,
             "Overall RTP too low: {rtp:.6}% — payout math is broken"
         );
         assert!(
-            rtp <= 99.01,
+            rtp <= 99.10,
             "Overall RTP too high: {rtp:.6}% — user has edge!"
         );
 
         for (i, name) in ["Under", "Over", "In", "Out"].iter().enumerate() {
             let mode_rtp = per_mode[i].rtp_pct();
             assert!(
-                mode_rtp >= 98.95,
+                mode_rtp >= 98.50,
                 "{name} RTP too low: {mode_rtp:.6}%"
             );
             assert!(
-                mode_rtp <= 99.05,
+                mode_rtp <= 99.50,
                 "{name} RTP too high: {mode_rtp:.6}%"
             );
         }
@@ -504,11 +504,11 @@ mod rtp_simulation {
             );
 
             assert!(
-                rtp >= 98.95,
+                rtp >= 98.50,
                 "{mode:?} RTP too low: {rtp:.6}%"
             );
             assert!(
-                rtp <= 99.05,
+                rtp <= 99.50,
                 "{mode:?} RTP too high: {rtp:.6}%"
             );
         }

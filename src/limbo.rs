@@ -2,7 +2,7 @@ use crate::shared::{GamePayout, MAX_WIN, PAYOUT_DIVISOR};
 
 pub const LIMBO_GAME_ID: u8 = 1;
 pub const POW2_32: u64 = 4_294_967_296;
-pub const RTP_PERCENT: u32 = 99;
+pub const RTP_PERCENT: u32 = 98;
 pub const MIN_MULTI_X100: u64 = 101;
 pub const MAX_MULTI_X100: u64 = 999_999;
 /// Circuit-side payout divisor: `bet × prediction_x100 / 100`.

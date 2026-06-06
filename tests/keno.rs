@@ -136,22 +136,22 @@ fn each_table_has_correct_length() {
 
 #[test]
 fn multiplier_tables_match_backend() {
-    assert_eq!(get_multiplier_table(0, 1).unwrap(), &[7000, 18200]);
+    assert_eq!(get_multiplier_table(0, 1).unwrap(), &[7000, 18600]);
     assert_eq!(
         get_multiplier_table(0, 3).unwrap(),
-        &[0, 11000, 13000, 260100]
+        &[0, 10996, 13900, 260100]
     );
     assert_eq!(
         get_multiplier_table(1, 6).unwrap(),
-        &[0, 0, 0, 30000, 90000, 1760000, 7010000]
+        &[0, 0, 0, 29985, 90000, 1809300, 7100000]
     );
     assert_eq!(
         get_multiplier_table(2, 3).unwrap(),
-        &[0, 0, 0, 806900]
+        &[0, 0, 0, 815100]
     );
     assert_eq!(
         get_multiplier_table(2, 10).unwrap(),
-        &[0, 0, 0, 0, 35000, 80000, 120000, 570000, 5000000, 8000000, 10000000]
+        &[0, 0, 0, 0, 34986, 80000, 130000, 632000, 5000000, 8000000, 10000000]
     );
 }
 
@@ -218,10 +218,10 @@ fn payout_below_max_win_not_capped() {
 #[test]
 fn payout_integer_floor_division() {
     let random = [0u64, 0, 0, 0];
-    // bet = 333333 atomic, multi = 18200 (1.82x)
+    // bet = 333333 atomic, multi = 18600 (1.86x)
     let payout = compute_payout(&random, 333_333, 0, &[0]); // 1 match
-    // 333_333 x 18200 / 10000 = 6_066_660_600 / 10000 = 606_666 (floor)
-    assert_eq!(payout.win_amount, 606_666);
+    // 333_333 x 18600 / 10000 = 6_199_993_800 / 10000 = 619_999 (floor)
+    assert_eq!(payout.win_amount, 619_999);
 }
 
 // ── drawn_from_random ─────────────────────────────────────────
@@ -370,12 +370,20 @@ fn rtp_simulation_keno() {
     for _ in 0..n {
         let risk: u8 = rng.gen_range(0..3);
         let picks: u8 = rng.gen_range(1..=10);
-        let bet: u64 = rng.gen_range(10_000..=700_000_000);
         let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
 
         let mut nums: Vec<u8> = (0..NUMBERS_RANGE as u8).collect();
         nums.shuffle(&mut rng);
         let selected: Vec<u8> = nums[..picks as usize].to_vec();
+
+        let table = get_multiplier_table(risk, picks).unwrap();
+        let max_multi = *table.iter().max().unwrap();
+        let max_bet = if max_multi > 0 {
+            (MAX_WIN as u128 * PAYOUT_DIVISOR as u128 / max_multi as u128) as u64
+        } else {
+            700_000_000
+        };
+        let bet: u64 = rng.gen_range(10_000..=max_bet.max(10_000));
 
         let payout = compute_payout(&random, bet, risk, &selected);
         let win = payout.win_amount as u128;
@@ -408,6 +416,6 @@ fn rtp_simulation_keno() {
     }
     println!();
 
-    assert!(rtp >= 75.0, "Overall RTP too low: {rtp:.6}%");
-    assert!(rtp <= 95.0, "Overall RTP too high: {rtp:.6}%");
+    assert!(rtp >= 98.5, "Overall RTP too low: {rtp:.6}%");
+    assert!(rtp <= 99.5, "Overall RTP too high: {rtp:.6}%");
 }

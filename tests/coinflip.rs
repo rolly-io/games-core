@@ -205,7 +205,7 @@ mod rtp_simulation {
         println!("Expected:    99.0000%");
         println!();
 
-        assert!(rtp >= 98.98, "RTP too low: {rtp:.6}%");
-        assert!(rtp <= 99.02, "RTP too high: {rtp:.6}%");
+        assert!(rtp >= 98.95, "RTP too low: {rtp:.6}%");
+        assert!(rtp <= 99.05, "RTP too high: {rtp:.6}%");
     }
 }

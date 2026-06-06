@@ -130,34 +130,29 @@ fn path_only_uses_rows_bits() {
 
 #[test]
 fn lookup_sector0_rows8_bucket0() {
-    assert_eq!(lookup_multiplier(0, 8, false, 0), 51300);
+    assert_eq!(lookup_multiplier(0, 8, false, 0), 56000);
 }
 
 #[test]
 fn lookup_sector0_rows8_bucket_last() {
-    assert_eq!(lookup_multiplier(0, 8, false, 8), 51300);
+    assert_eq!(lookup_multiplier(0, 8, false, 8), 56000);
 }
 
 #[test]
-fn lookup_sector2_rows12_asymmetric() {
-    assert_eq!(lookup_multiplier(2, 12, false, 0), 1658000);
+fn lookup_sector0_rows8_bucket_center() {
+    assert_eq!(lookup_multiplier(0, 8, false, 4), 5000);
+}
+
+#[test]
+fn lookup_sector2_rows12_symmetric() {
+    assert_eq!(lookup_multiplier(2, 12, false, 0), 1681000);
     assert_eq!(lookup_multiplier(2, 12, false, 12), 1681000);
-    assert_ne!(
-        lookup_multiplier(2, 12, false, 0),
-        lookup_multiplier(2, 12, false, 12),
-        "sector 2 rows 12 is intentionally asymmetric"
-    );
 }
 
 #[test]
-fn lookup_sector0_rows15_asymmetric() {
-    assert_eq!(lookup_multiplier(0, 15, false, 0), 175000);
+fn lookup_sector0_rows15_symmetric() {
+    assert_eq!(lookup_multiplier(0, 15, false, 0), 177000);
     assert_eq!(lookup_multiplier(0, 15, false, 15), 177000);
-    assert_ne!(
-        lookup_multiplier(0, 15, false, 0),
-        lookup_multiplier(0, 15, false, 15),
-        "sector 0 rows 15 is intentionally asymmetric"
-    );
 }
 
 #[test]
@@ -181,10 +176,10 @@ fn payout_bucket0_sector0_rows8() {
     let random = random_with_bits(0);
     let payout = compute_payout(&random, 100 * USDT_DECIMALS, 0, 8, false);
     assert_eq!(payout.roll_number, 0);
-    assert_eq!(payout.multiplier, 51300);
+    assert_eq!(payout.multiplier, 56000);
     assert!(payout.is_win);
-    // 100_000_000 * 51300 / 10000 = 513_000_000
-    assert_eq!(payout.win_amount, 513_000_000);
+    // 100_000_000 * 56000 / 10000 = 560_000_000
+    assert_eq!(payout.win_amount, 560_000_000);
 }
 
 #[test]
@@ -227,10 +222,10 @@ fn max_win_cap_extreme() {
 #[test]
 fn below_max_win_not_capped() {
     let random = random_with_bits(0);
-    // sector 0 rows 8 bucket 0: 5.13x
+    // sector 0 rows 8 bucket 0: 5.6x
     let payout = compute_payout(&random, 10 * USDT_DECIMALS, 0, 8, false);
-    // 10 * 5.13 = 51.3 USDT << 10000 cap
-    assert_eq!(payout.win_amount, 51_300_000);
+    // 10_000_000 * 56000 / 10000 = 56_000_000
+    assert_eq!(payout.win_amount, 56_000_000);
     assert!(payout.win_amount < MAX_WIN);
 }
 
@@ -239,10 +234,10 @@ fn below_max_win_not_capped() {
 #[test]
 fn integer_floor_division() {
     let random = random_with_bits(0);
-    // bet = 333333 atomic (0.333333 USDT), multi = 51300 (5.13x)
+    // bet = 333333 atomic (0.333333 USDT), multi = 56000 (5.6x)
     let payout = compute_payout(&random, 333_333, 0, 8, false);
-    // 333_333 * 51300 / 10000 = 17_099_982_900 / 10000 = 1_709_998 (floor)
-    assert_eq!(payout.win_amount, 1_709_998);
+    // 333_333 * 56000 / 10000 = 18_666_648_000 / 10000 = 1_866_664 (floor)
+    assert_eq!(payout.win_amount, 1_866_664);
 }
 
 // ── u128 no overflow ───────────────────────────────────────────
@@ -377,8 +372,14 @@ fn rtp_simulation_plinko() {
 
     for _ in 0..n {
         let cfg_idx = rng.gen_range(0..configs.len());
-        let (sector, rows, is_extreme, _) = configs[cfg_idx];
-        let bet: u64 = rng.gen_range(10_000..=700_000_000);
+        let (sector, rows, is_extreme, table) = configs[cfg_idx];
+        let max_multi = *table.iter().max().unwrap();
+        let max_bet = if max_multi > 0 {
+            (MAX_WIN as u128 * PAYOUT_DIVISOR as u128 / max_multi as u128) as u64
+        } else {
+            700_000_000
+        };
+        let bet: u64 = rng.gen_range(10_000..=max_bet.max(10_000));
         let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
 
         let payout = compute_payout(&random, bet, sector, rows, is_extreme);
@@ -437,8 +438,12 @@ fn rtp_simulation_plinko_extreme_100m() {
         let mut total_win: u128 = 0;
         let mut wins: u64 = 0;
 
+        let table = get_multiplier_row(sector, rows, true).unwrap();
+        let max_multi = *table.iter().max().unwrap();
+        let max_bet = (MAX_WIN as u128 * PAYOUT_DIVISOR as u128 / max_multi as u128) as u64;
+
         for _ in 0..n {
-            let bet: u64 = rng.gen_range(10_000..=700_000_000);
+            let bet: u64 = rng.gen_range(10_000..=max_bet.max(10_000));
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
             let payout = compute_payout(&random, bet, sector, rows, true);
 

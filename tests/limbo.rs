@@ -22,10 +22,9 @@ fn multiplier_v_max_clamps_to_max() {
 }
 
 #[test]
-fn multiplier_exact_200_rtp99() {
-    // denom = floor(99 * 2^32 / 200) + some offset so floor gives exactly 200.
-    // denom = 2126008411 → v = 2^32 - 2126008411 = 2168958885
-    let r = random_with_v(2_168_958_885);
+fn multiplier_exact_200_rtp98() {
+    // denom = floor(98 * 2^32 / 200) = 2104533975 → v = 2^32 - 2104533975 = 2190433321
+    let r = random_with_v(2_190_433_321);
     assert_eq!(multiplier_from_random(&r), 200);
 }
 
@@ -59,9 +58,9 @@ fn lose_high_prediction_low_multi() {
 
 #[test]
 fn win_at_exact_threshold() {
-    // v=2168958885 → denom=2126008411 → multi=200 with rtp=99
-    // prediction=200 → lhs = 200 * 2126008411 = 425201682200 <= rhs = 425201682304 → WIN
-    let r = random_with_v(2_168_958_885);
+    // v=2190433321 → denom=2104533975 → multi=200 with rtp=98
+    // prediction=200 → lhs = 200 * 2104533975 = 420906795000 <= rhs = 420906795008 → WIN
+    let r = random_with_v(2_190_433_321);
     let p = compute_payout(&r, 50 * USDT_DECIMALS, 200);
     assert!(p.is_win);
     assert_eq!(p.roll_number, 200);
@@ -70,7 +69,7 @@ fn win_at_exact_threshold() {
 
 #[test]
 fn lose_just_above_threshold() {
-    let r = random_with_v(2_168_958_885);
+    let r = random_with_v(2_190_433_321);
     let p = compute_payout(&r, 50 * USDT_DECIMALS, 201);
     assert!(!p.is_win);
     assert_eq!(p.win_amount, 0);
@@ -217,7 +216,7 @@ mod rtp_simulation {
 
             let v = random[0] & 0xFFFF_FFFF;
             let denom = POW2_32 - v;
-            let won = (pred as u128 * denom as u128) <= (99u128 * POW2_32 as u128);
+            let won = (pred as u128 * denom as u128) <= (RTP_PERCENT as u128 * POW2_32 as u128);
             let win = uncapped_win(bet, pred, won);
 
             total_bet += bet as u128;
