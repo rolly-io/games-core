@@ -15,7 +15,7 @@ pub enum GameId {
     Keno = 3,
     Plinko = 4,
     Coinflip = 5,
-    Crash = 6,
+    Aviato = 6,
 }
 
 /// Result of a payout computation for any game.

@@ -1,4 +1,4 @@
-use rolly_game_core::crash::*;
+use rolly_game_core::aviato::*;
 use rolly_game_core::shared::*;
 use rand::prelude::*;
 use rand::rngs::StdRng;
@@ -7,38 +7,38 @@ fn random_with_v(desired_v: u64) -> [u64; 4] {
     [desired_v & 0xFFFF_FFFF, 0, 0, 0]
 }
 
-// ── Crash point extraction ───────────────────────────────────
+// ── Aviato point extraction ───────────────────────────────────
 
 #[test]
-fn crash_v_zero_clamps_to_min_crash() {
+fn aviato_v_zero_clamps_to_min() {
     let r = random_with_v(0);
-    assert_eq!(crash_point_from_random(&r), MIN_CRASH_X100);
+    assert_eq!(aviato_point_from_random(&r), MIN_AVIATO_X100);
 }
 
 #[test]
-fn crash_v_max_clamps_to_max() {
+fn aviato_v_max_clamps_to_max() {
     let r = random_with_v(POW2_32 - 1);
-    assert_eq!(crash_point_from_random(&r), MAX_MULTI_X100);
+    assert_eq!(aviato_point_from_random(&r), MAX_MULTI_X100);
 }
 
 #[test]
-fn crash_ignores_upper_bits() {
+fn aviato_ignores_upper_bits() {
     let r = [0x1_0000_0000u64 | (POW2_32 - 1), 0, 0, 0];
-    assert_eq!(crash_point_from_random(&r), MAX_MULTI_X100);
+    assert_eq!(aviato_point_from_random(&r), MAX_MULTI_X100);
 }
 
 #[test]
-fn crash_point_200() {
+fn aviato_point_200() {
     let v_lo = POW2_32 - (RTP_PERCENT as u64 * POW2_32 / 200);
     let r = random_with_v(v_lo);
-    assert_eq!(crash_point_from_random(&r), 200);
+    assert_eq!(aviato_point_from_random(&r), 200);
 }
 
 // ── Win / loss ───────────────────────────────────────────────
 
 #[test]
-fn win_cashout_below_crash() {
-    let r = random_with_v(POW2_32 - 1); // crash = 1_000_000
+fn win_cashout_below_aviato() {
+    let r = random_with_v(POW2_32 - 1); // aviato = 1_000_000
     let p = compute_payout(&r, 100 * USDT_DECIMALS, 200);
     assert!(p.is_win);
     assert_eq!(p.win_amount, 200_000_000); // 100 * 2.00x
@@ -55,8 +55,8 @@ fn loss_no_cashout() {
 }
 
 #[test]
-fn loss_cashout_above_crash() {
-    let r = random_with_v(0); // crash_x100 = 100 (1.00x)
+fn loss_cashout_above_aviato() {
+    let r = random_with_v(0); // aviato_x100 = 100 (1.00x)
     let p = compute_payout(&r, 100 * USDT_DECIMALS, 200);
     assert!(!p.is_win);
     assert_eq!(p.win_amount, 0);
@@ -64,8 +64,8 @@ fn loss_cashout_above_crash() {
 }
 
 #[test]
-fn instant_crash_min_cashout_loses() {
-    // v=0 → crash = 100 (1.00x). Min cashout = 101 (1.01x) > 100 → loss.
+fn instant_aviato_min_cashout_loses() {
+    // v=0 → aviato = 100 (1.00x). Min cashout = 101 (1.01x) > 100 → loss.
     let r = random_with_v(0);
     let p = compute_payout(&r, 100 * USDT_DECIMALS, MIN_CASHOUT_X100 as u32);
     assert!(!p.is_win);
@@ -73,8 +73,8 @@ fn instant_crash_min_cashout_loses() {
 }
 
 #[test]
-fn min_cashout_wins_when_crash_high() {
-    // crash >> 101 → cashout 1.01x wins. Payout = 100 * 101/100 = 101 USDT.
+fn min_cashout_wins_when_aviato_high() {
+    // aviato >> 101 → cashout 1.01x wins. Payout = 100 * 101/100 = 101 USDT.
     let r = random_with_v(POW2_32 - 1);
     let p = compute_payout(&r, 100 * USDT_DECIMALS, MIN_CASHOUT_X100 as u32);
     assert!(p.is_win);
@@ -85,7 +85,7 @@ fn min_cashout_wins_when_crash_high() {
 
 #[test]
 fn max_win_cap_applied() {
-    let r = random_with_v(POW2_32 - 1); // crash = max
+    let r = random_with_v(POW2_32 - 1); // aviato = max
     let bet = 1000 * USDT_DECIMALS;
     let p = compute_payout(&r, bet, MAX_MULTI_X100 as u32);
     assert!(p.is_win);
@@ -130,7 +130,7 @@ fn cashout_zero_does_not_panic() {
 
 #[test]
 fn cashout_min_valid_does_not_panic() {
-    let r = random_with_v(POW2_32 - 1); // crash >> 101
+    let r = random_with_v(POW2_32 - 1); // aviato >> 101
     let p = compute_payout(&r, 1_000_000, MIN_CASHOUT_X100 as u32);
     assert!(p.is_win);
 }
@@ -157,7 +157,7 @@ fn zero_bet_zero_win() {
 #[test]
 fn u128_no_overflow_max_scenario() {
     let bet = 700 * USDT_DECIMALS;
-    let raw = (bet as u128 * MAX_MULTI_X100 as u128) / CRASH_PAYOUT_DIVISOR as u128;
+    let raw = (bet as u128 * MAX_MULTI_X100 as u128) / AVIATO_PAYOUT_DIVISOR as u128;
     assert!(raw < u64::MAX as u128);
 }
 
@@ -189,56 +189,56 @@ fn floor_loses_remainder() {
 // ── Distribution sanity ──────────────────────────────────────
 
 #[test]
-fn crash_distribution_median_approx() {
+fn aviato_distribution_median_approx() {
     let mut rng = StdRng::seed_from_u64(42);
     let n = 100_000;
     let above_200 = (0..n)
         .filter(|_| {
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-            crash_point_from_random(&random) >= 200
+            aviato_point_from_random(&random) >= 200
         })
         .count();
     let ratio = above_200 as f64 / n as f64;
     assert!(
         (ratio - 0.495).abs() < 0.01,
-        "P(crash >= 2.00x) should be ~49.5%, got {:.2}%",
+        "P(aviato >= 2.00x) should be ~49.5%, got {:.2}%",
         ratio * 100.0
     );
 }
 
 #[test]
-fn crash_distribution_10x_check() {
+fn aviato_distribution_10x_check() {
     let mut rng = StdRng::seed_from_u64(123);
     let n = 200_000;
     let above_1000 = (0..n)
         .filter(|_| {
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-            crash_point_from_random(&random) >= 1000
+            aviato_point_from_random(&random) >= 1000
         })
         .count();
     let ratio = above_1000 as f64 / n as f64;
     assert!(
         (ratio - 0.099).abs() < 0.005,
-        "P(crash >= 10.00x) should be ~9.9%, got {:.2}%",
+        "P(aviato >= 10.00x) should be ~9.9%, got {:.2}%",
         ratio * 100.0
     );
 }
 
 #[test]
-fn crash_distribution_instant_crash_rate() {
-    // P(crash_x100 == MIN_CRASH_X100) ≈ 1% (crash at 1.00x → all lose)
+fn aviato_distribution_instant_rate() {
+    // P(aviato_x100 == MIN_AVIATO_X100) ≈ 1% (aviato at 1.00x → all lose)
     let mut rng = StdRng::seed_from_u64(77);
     let n = 200_000;
     let instant = (0..n)
         .filter(|_| {
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-            crash_point_from_random(&random) == MIN_CRASH_X100
+            aviato_point_from_random(&random) == MIN_AVIATO_X100
         })
         .count();
     let ratio = instant as f64 / n as f64;
     assert!(
         (ratio - 0.0198).abs() < 0.005,
-        "P(crash == 1.00x) should be ~1.98%, got {:.2}%",
+        "P(aviato == 1.00x) should be ~1.98%, got {:.2}%",
         ratio * 100.0
     );
 }
@@ -270,7 +270,7 @@ mod rtp_simulation {
 
     #[test]
     #[ignore]
-    fn rtp_simulation_crash() {
+    fn rtp_simulation_aviato() {
         let n = iteration_count();
         let mut rng = StdRng::seed_from_u64(42);
 
@@ -284,10 +284,10 @@ mod rtp_simulation {
             let bet: u64 = rng.gen_range(10_000..=700_000_000);
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
 
-            let crash_x100 = crash_point_from_random(&random);
-            let won = (cashout as u64) <= crash_x100;
+            let aviato_x100 = aviato_point_from_random(&random);
+            let won = (cashout as u64) <= aviato_x100;
             let win = if won {
-                (bet as u128 * cashout as u128) / CRASH_PAYOUT_DIVISOR as u128
+                (bet as u128 * cashout as u128) / AVIATO_PAYOUT_DIVISOR as u128
             } else {
                 0
             };
@@ -304,7 +304,7 @@ mod rtp_simulation {
             0.0
         };
 
-        println!("\n=== CRASH RTP SIMULATION ===");
+        println!("\n=== AVIATO RTP SIMULATION ===");
         println!("Iterations: {n}");
         println!(
             "  RTP=99  n={count:>12}  wins={wins:>12}  actual={rtp:.6}%  edge={:.6}%",
