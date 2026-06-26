@@ -10,3 +10,5 @@ description = "Shared game constants, multiplier tables, and payout logic for Ro
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8"
+[dependencies]
+rand = "0.10.1"

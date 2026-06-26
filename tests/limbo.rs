@@ -10,9 +10,11 @@ fn random_with_v(desired_v: u64) -> [u64; 4] {
 // ── Multiplier extraction ──────────────────────────────────────
 
 #[test]
-fn multiplier_v_zero_clamps_to_min() {
+fn multiplier_v_zero_clamps_to_display_floor() {
+    // True raw at v=0 is 98 (0.98x); display floor lifts it to 1.00x, which is
+    // strictly below the minimum target (1.01x) so a loss never reads as a win.
     let r = random_with_v(0);
-    assert_eq!(multiplier_from_random(&r), MIN_MULTI_X100);
+    assert_eq!(multiplier_from_random(&r), MIN_DISPLAY_MULTI_X100);
 }
 
 #[test]
@@ -53,7 +55,7 @@ fn lose_high_prediction_low_multi() {
     assert!(!p.is_win);
     assert_eq!(p.win_amount, 0);
     assert_eq!(p.multiplier, 0);
-    assert_eq!(p.roll_number, MIN_MULTI_X100 as u32);
+    assert_eq!(p.roll_number, MIN_DISPLAY_MULTI_X100 as u32);
 }
 
 #[test]
@@ -164,7 +166,7 @@ fn win_check_matches_multiplier_comparison_1k() {
         let v = random[0] & 0xFFFF_FFFF;
         let denom = POW2_32 - v;
         let lhs = pred as u128 * denom as u128;
-        let rhs = 99u128 * POW2_32 as u128;
+        let rhs = RTP_PERCENT as u128 * POW2_32 as u128;
         let won_comparison = lhs <= rhs;
 
         let won_multi = pred as u64 <= multi;
@@ -234,7 +236,7 @@ mod rtp_simulation {
         println!("\n=== LIMBO RTP SIMULATION ===");
         println!("Iterations: {n}");
         println!(
-            "  RTP=99  n={count:>12}  wins={wins:>12}  actual={rtp:.6}%  edge={:.6}%",
+            "  RTP={RTP_PERCENT}  n={count:>12}  wins={wins:>12}  actual={rtp:.6}%  edge={:.6}%",
             100.0 - rtp,
         );
 

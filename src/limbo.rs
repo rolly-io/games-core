@@ -5,6 +5,13 @@ pub const POW2_32: u64 = 4_294_967_296;
 pub const RTP_PERCENT: u32 = 98;
 pub const MIN_MULTI_X100: u64 = 101;
 pub const MAX_MULTI_X100: u64 = 999_999;
+/// Display-only floor for the crash multiplier (×100).
+/// Decoupled from `MIN_MULTI_X100` (the minimum *target*) so that losing rolls,
+/// whose true multiplier falls below the minimum selectable target (0.98–1.00x),
+/// render as 1.00x instead of being clamped up to 1.01x — which would look
+/// identical to a winning target of 1.01x and confuse players.
+/// Pure display value: not used in the win check, payout, or circuit.
+pub const MIN_DISPLAY_MULTI_X100: u64 = 100;
 /// Circuit-side payout divisor: `bet × prediction_x100 / 100`.
 /// Equivalent to `bet × prediction_x10000 / PAYOUT_DIVISOR` in game-core.
 pub const LIMBO_PAYOUT_DIVISOR: u64 = PAYOUT_DIVISOR / 100;
@@ -14,12 +21,16 @@ pub const LIMBO_PAYOUT_DIVISOR: u64 = PAYOUT_DIVISOR / 100;
 ///   v     = random[0] & 0xFFFF_FFFF  (lower 32 bits)
 ///   denom = 2^32 - v                 (range 1..=2^32)
 ///   raw   = floor(RTP_PERCENT * 2^32 / denom)
-///   result = clamp(raw, 101, 999999)
+///   result = clamp(raw, MIN_DISPLAY_MULTI_X100, MAX_MULTI_X100)
+///
+/// The lower bound is the display floor (100 = 1.00x), not the minimum target
+/// (101 = 1.01x): a losing roll below the smallest target must render strictly
+/// below it, not equal to it.
 pub fn multiplier_from_random(random: &[u64; 4]) -> u64 {
     let v = random[0] & 0xFFFF_FFFF;
     let denom = POW2_32 - v;
     let raw = (RTP_PERCENT as u128 * POW2_32 as u128) / denom as u128;
-    (raw as u64).clamp(MIN_MULTI_X100, MAX_MULTI_X100)
+    (raw as u64).clamp(MIN_DISPLAY_MULTI_X100, MAX_MULTI_X100)
 }
 
 /// Full payout computation for Limbo — pure integer arithmetic, zero floats.
