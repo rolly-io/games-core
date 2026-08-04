@@ -5,3 +5,4 @@ pub mod dice;
 pub mod keno;
 pub mod limbo;
 pub mod plinko;
+pub mod blackjack;
