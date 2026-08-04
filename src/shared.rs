@@ -1,3 +1,5 @@
+use crate::blackjack;
+
 /// 1 USDT = 1_000_000 atomic units (6 decimals, same as on-chain USDT).
 pub const USDT_DECIMALS: u64 = 1_000_000;
 
@@ -16,6 +18,7 @@ pub enum GameId {
     Plinko = 4,
     Coinflip = 5,
     Crash = 6,
+    Blackjack = blackjack::BLACKJACK_GAME_ID,
 }
 
 /// Result of a payout computation for any game.
