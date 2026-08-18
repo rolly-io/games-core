@@ -274,6 +274,31 @@ fn payout_rejects_empty_selected() {
     compute_payout(&random, USDT_DECIMALS, 0, &[]);
 }
 
+#[test]
+fn validate_selected_accepts_well_formed_sets() {
+    assert!(validate_selected(&[0]));
+    assert!(validate_selected(&[39]));
+    assert!(validate_selected(&[2, 5, 10, 15, 20]));
+    assert!(validate_selected(&(0..MAX_PICKS as u8).collect::<Vec<_>>()));
+    assert!(validate_selected(&[30, 31, 32, 33, 34, 35, 36, 37, 38, 39]));
+}
+
+#[test]
+fn validate_selected_rejects_what_compute_payout_panics_on() {
+    assert!(!validate_selected(&[]), "empty");
+    assert!(!validate_selected(&[5, 5]), "duplicate");
+    assert!(!validate_selected(&[0; MAX_PICKS]), "all identical");
+    assert!(!validate_selected(&[40]), "out of range");
+    assert!(!validate_selected(&[255]), "far out of range");
+    assert!(
+        !validate_selected(&(0..=MAX_PICKS as u8).collect::<Vec<_>>()),
+        "more than MAX_PICKS",
+    );
+    // Ordering is part of the contract: the prediction hash preimage and the
+    // circuit's `selected[]` slots are both canonically ascending.
+    assert!(!validate_selected(&[5, 2]), "descending");
+}
+
 // ── Fuzz ──────────────────────────────────────────────────────
 
 #[test]
