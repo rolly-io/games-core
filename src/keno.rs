@@ -154,6 +154,21 @@ pub fn count_matches(selected: &[u8], drawn: &[u8; DRAW_COUNT]) -> u8 {
     selected.iter().filter(|s| drawn.contains(s)).count() as u8
 }
 
+/// Whether `selected` is a well-formed pick set: 1 to 10 numbers, sorted
+/// ascending, distinct, each in `[0, NUMBERS_RANGE)`.
+///
+/// `count_matches` scores every entry independently, so a repeated number would
+/// be counted once per occurrence — callers that accept untrusted input must
+/// screen it through here instead of relying on the panics in `compute_payout`.
+pub fn validate_selected(selected: &[u8]) -> bool {
+    if selected.is_empty() || selected.len() > MAX_PICKS {
+        return false;
+    }
+    selected.iter().enumerate().all(|(i, &s)| {
+        (s as usize) < NUMBERS_RANGE && (i == 0 || s > selected[i - 1])
+    })
+}
+
 /// Full payout computation for Keno — pure integer arithmetic, zero floats.
 ///
 /// `random`: 4 Goldilocks field elements (Poseidon2 output).
