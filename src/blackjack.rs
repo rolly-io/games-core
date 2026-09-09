@@ -198,10 +198,42 @@ pub struct BlackjackResult {
     pub second_points: u32,
     /// 1 if the round stayed single-hand, 2 if a split created a second hand.
     pub num_hands: u8,
+    /// First hand's terminal `kind` (`0`=bet, `1`=hit, `2`=stand, `3`=double,
+    /// `4`=split, `5`=insurance). Display/verification only — NOT consumed by the
+    /// circuit. Any *closed* hand (explicit stand, double, bust, a natural/drawn
+    /// 21, or a 10-card charlie) collapses to `2` (stand), so a consumer can treat
+    /// `first_kind == 2` as "the first hand can no longer act". Mirrors the JS
+    /// `firstHand.type` the frontend reads to highlight the active hand.
+    pub first_kind: u8,
+    /// Second hand's terminal `kind` (same encoding as [`Self::first_kind`]), or
+    /// `0` (bet) when the round stayed single-hand (no split). Mirrors the JS
+    /// `secondHand.type`.
+    pub second_kind: u8,
+    /// First hand's staked amount in atomic units — the base bet, or `2×` after a
+    /// double. Display only; the authoritative round total is [`Self::total_staked`].
+    pub first_amount: u64,
+    /// Second hand's staked amount in atomic units, or `0` when the round stayed
+    /// single-hand (no split).
+    pub second_amount: u64,
+    /// First hand's win in atomic units (stake returned + profit), BEFORE the
+    /// round-level `MAX_WIN` cap. Display/history only; the capped, authoritative
+    /// payout is the round total [`Self::win_amount`] (`payout.win_amount`).
+    pub first_win: u64,
+    /// Second hand's win in atomic units (pre-cap), or `0` when single-hand.
+    pub second_win: u64,
     /// Whether a positive insurance stake was standing at settle.
     pub insurance_taken: bool,
     /// Whether the action sequence brought the round to a settled state.
     pub is_finished: bool,
+    /// First hand's final cards (rank codes 0..=12). The exact cards dealt to the
+    /// player's first hand — display/verification only, not consumed by the circuit.
+    pub first_cards: Vec<u8>,
+    /// Second hand's final cards (rank codes), or empty when the round stayed
+    /// single-hand (no split).
+    pub second_cards: Vec<u8>,
+    /// Dealer's final cards (rank codes), including the revealed hole card and any
+    /// draws.
+    pub dealer_cards: Vec<u8>,
 }
 
 /// Blackjack points for a hand, with soft-ace handling identical to the JS
@@ -688,6 +720,27 @@ pub fn replay_full(cards_values: &[u8], actions_packed: &[u8], bet_atomic: u64) 
         .as_ref()
         .map(|h| get_hand_points(&h.cards))
         .unwrap_or(0);
+    let first_cards = st.first.cards.clone();
+    let second_cards = st
+        .second
+        .as_ref()
+        .map(|h| h.cards.clone())
+        .unwrap_or_default();
+    let dealer_cards = st.dealer_cards.clone();
+    // Terminal per-hand kinds for the display layer (frontend active-hand
+    // highlight). A closed hand always ends as KIND_STAND; the second hand's
+    // kind is meaningless without a split, so report bet (0) then.
+    let first_kind = st.first.kind;
+    let second_kind = st.second.as_ref().map(|h| h.kind).unwrap_or(KIND_BET);
+    // Per-hand staked/win breakdown for the display layer (win is pre-cap; the
+    // capped round total lives in `win_amount`). Absent second hand → zeros.
+    let first_amount = st.first.amount;
+    let first_win = st.first.win_amount;
+    let (second_amount, second_win) = st
+        .second
+        .as_ref()
+        .map(|h| (h.amount, h.win_amount))
+        .unwrap_or((0, 0));
 
     BlackjackResult {
         payout: GamePayout {
@@ -702,8 +755,17 @@ pub fn replay_full(cards_values: &[u8], actions_packed: &[u8], bet_atomic: u64) 
         first_points,
         second_points,
         num_hands: 1 + st.second.is_some() as u8,
+        first_kind,
+        second_kind,
+        first_amount,
+        second_amount,
+        first_win,
+        second_win,
         insurance_taken: st.insurance_amount > 0,
         is_finished: st.finished(),
+        first_cards,
+        second_cards,
+        dealer_cards,
     }
 }
 
