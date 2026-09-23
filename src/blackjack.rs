@@ -77,6 +77,17 @@ pub fn shoe_layout_code(i: usize) -> u8 {
     ((i % 52) / 4) as u8
 }
 
+/// Cosmetic suit code (0..=3) of shoe position `i` in the *unshuffled* layout:
+/// every 52-card block is `rank·4 + suit`, so `suit = (i mod 52) mod 4`.
+///
+/// Suits are NOT consensus — the circuit and every payout depend only on the
+/// rank codes. They exist so the display layer can show the exact physical
+/// card the fair shuffle drew instead of inventing a suit pattern.
+#[inline]
+pub fn shoe_layout_suit(i: usize) -> u8 {
+    ((i % 52) % 4) as u8
+}
+
 /// Deal the shoe with a deterministic `MAX_CARDS`-swap partial Fisher–Yates
 /// over the fixed 416-card layout, returning the dealt rank codes.
 ///
@@ -85,15 +96,33 @@ pub fn shoe_layout_code(i: usize) -> u8 {
 /// user_secret_random)`); the swap partner is `j = k + (swap_random[k] mod
 /// (SHOE_SIZE − k))`. Pure — no hashing lives here.
 pub fn deal_shoe(swap_random: &[u64; MAX_CARDS]) -> [u8; MAX_CARDS] {
-    let mut arr: [u8; SHOE_SIZE] = core::array::from_fn(shoe_layout_code);
+    deal_shoe_with_suits(swap_random).0
+}
+
+/// Like [`deal_shoe`], but also returns the cosmetic suit codes of the same
+/// physical cards the shuffle picked (`suits[k]` belongs to `ranks[k]`).
+///
+/// The permutation is identical to [`deal_shoe`] — the same swaps applied to
+/// the full 416 layout positions instead of the pre-mapped rank codes — so the
+/// rank output is byte-for-byte the consensus shoe, and the suits are the ones
+/// physically sitting at the drawn positions (display-only, see
+/// [`shoe_layout_suit`]).
+pub fn deal_shoe_with_suits(
+    swap_random: &[u64; MAX_CARDS],
+) -> ([u8; MAX_CARDS], [u8; MAX_CARDS]) {
+    let mut arr: [u16; SHOE_SIZE] = core::array::from_fn(|i| i as u16);
     for k in 0..MAX_CARDS {
         let m = (SHOE_SIZE - k) as u64;
         let j = k + (swap_random[k] % m) as usize;
         arr.swap(k, j);
     }
-    let mut drawn = [0u8; MAX_CARDS];
-    drawn.copy_from_slice(&arr[..MAX_CARDS]);
-    drawn
+    let mut ranks = [0u8; MAX_CARDS];
+    let mut suits = [0u8; MAX_CARDS];
+    for k in 0..MAX_CARDS {
+        ranks[k] = shoe_layout_code(arr[k] as usize);
+        suits[k] = shoe_layout_suit(arr[k] as usize);
+    }
+    (ranks, suits)
 }
 
 /// Pack an action sequence into the two base-8 halves the rollup records as
@@ -162,6 +191,10 @@ enum Status {
 #[derive(Clone)]
 struct Hand {
     cards: Vec<u8>,
+    /// Shoe draw index of each card in `cards` (parallel array). Display-only
+    /// bookkeeping so consumers can restore the cosmetic suit of the exact
+    /// physical card — never consumed by the payout logic.
+    idxs: Vec<u8>,
     amount: u64,
     win_amount: u64,
     kind: u8,
@@ -172,6 +205,8 @@ struct State {
     first: Hand,
     second: Option<Hand>,
     dealer_cards: Vec<u8>,
+    /// Shoe draw index of each dealer card (parallel to `dealer_cards`).
+    dealer_idxs: Vec<u8>,
     insurance_amount: u64,
     amount: u64,
     win_amount: u64,
@@ -234,6 +269,16 @@ pub struct BlackjackResult {
     /// Dealer's final cards (rank codes), including the revealed hole card and any
     /// draws.
     pub dealer_cards: Vec<u8>,
+    /// Shoe draw index (0..30) of each card in [`Self::first_cards`] — which
+    /// position of the dealt shoe the card came from. Display-only: paired with
+    /// the suits from [`deal_shoe_with_suits`] it restores the cosmetic suit of
+    /// the exact physical card the fair shuffle drew. NOT consumed by the
+    /// circuit or any payout.
+    pub first_card_indices: Vec<u8>,
+    /// Shoe draw indices of [`Self::second_cards`], or empty when single-hand.
+    pub second_card_indices: Vec<u8>,
+    /// Shoe draw indices of [`Self::dealer_cards`].
+    pub dealer_card_indices: Vec<u8>,
 }
 
 /// Blackjack points for a hand, with soft-ace handling identical to the JS
@@ -291,6 +336,7 @@ impl State {
         State {
             first: Hand {
                 cards: vec![cards[0], cards[1]],
+                idxs: vec![0, 1],
                 amount: bet,
                 win_amount: 0,
                 kind: KIND_BET,
@@ -298,6 +344,7 @@ impl State {
             },
             second: None,
             dealer_cards: vec![cards[2]],
+            dealer_idxs: vec![2],
             insurance_amount: 0,
             amount: bet,
             win_amount: 0,
@@ -344,6 +391,7 @@ impl State {
                 self.amount += extra;
                 self.second = Some(Hand {
                     cards: Vec::new(),
+                    idxs: Vec::new(),
                     amount: extra,
                     win_amount: 0,
                     kind: KIND_BET,
@@ -435,7 +483,7 @@ impl State {
             KIND_HIT => {
                 let idx = self.next_index();
                 let c = Self::card_at(cards, idx);
-                self.push_active(active_first, c);
+                self.push_active(active_first, c, idx as u8);
                 if self.active_cards_len(active_first) >= 10 {
                     self.set_active_kind(active_first, KIND_STAND);
                 }
@@ -443,7 +491,7 @@ impl State {
             KIND_DOUBLE => {
                 let idx = self.next_index();
                 let c = Self::card_at(cards, idx);
-                self.push_active(active_first, c);
+                self.push_active(active_first, c, idx as u8);
                 self.set_active_kind(active_first, KIND_STAND);
             }
             KIND_SPLIT => {
@@ -455,14 +503,17 @@ impl State {
                 let is_two_aces = self.first.cards[0] == 0;
                 let cards_count = self.first.cards.len() + self.second_len() + 2;
                 let second_card = self.first.cards.remove(0); // Array.shift()
+                let second_idx = self.first.idxs.remove(0);
                 let c0 = Self::card_at(cards, cards_count);
                 let c1 = Self::card_at(cards, cards_count + 1);
                 self.first.cards.push(c0);
+                self.first.idxs.push(cards_count as u8);
                 let new_kind = if is_two_aces { KIND_STAND } else { KIND_BET };
                 self.first.kind = new_kind;
                 let split_amount = self.first.amount;
                 self.second = Some(Hand {
                     cards: vec![second_card, c1],
+                    idxs: vec![second_idx, (cards_count + 1) as u8],
                     amount: split_amount,
                     win_amount: 0,
                     kind: new_kind,
@@ -532,9 +583,11 @@ impl State {
             if self.insurance_amount > 0 {
                 let hole = Self::card_at(cards, 3);
                 self.dealer_cards.push(hole);
+                self.dealer_idxs.push(3);
                 let dp = get_hand_points(&self.dealer_cards);
                 if dp == POINTS_LIMIT {
-                    self.win_amount += self.insurance_amount * 2;
+                    // Insurance pays 2:1: winnings (2x stake) + the stake itself back = 3x.
+                    self.win_amount += self.insurance_amount * 3;
                 }
             }
         }
@@ -566,7 +619,8 @@ impl State {
                 self.win_amount += self.first.amount;
             }
             if self.insurance_amount > 0 {
-                self.win_amount += self.insurance_amount * 2;
+                // Insurance pays 2:1: winnings (2x stake) + the stake itself back = 3x.
+                self.win_amount += self.insurance_amount * 3;
             }
         } else {
             // Push on the first hand (equal totals).
@@ -636,6 +690,7 @@ impl State {
         if self.status == Status::Cashout {
             let hole = Self::card_at(cards, 3);
             self.dealer_cards.push(hole);
+            self.dealer_idxs.push(3);
             let draw = self.second.is_some()
                 || self.first.cards.len() > 2
                 || self.first.points != POINTS_LIMIT;
@@ -644,16 +699,20 @@ impl State {
                     let idx = self.next_index();
                     let c = Self::card_at(cards, idx);
                     self.dealer_cards.push(c);
+                    self.dealer_idxs.push(idx as u8);
                 }
             }
         }
     }
 
-    fn push_active(&mut self, active_first: bool, card: u8) {
+    fn push_active(&mut self, active_first: bool, card: u8, idx: u8) {
         if active_first {
             self.first.cards.push(card);
+            self.first.idxs.push(idx);
         } else {
-            self.second.as_mut().expect("no active hand").cards.push(card);
+            let h = self.second.as_mut().expect("no active hand");
+            h.cards.push(card);
+            h.idxs.push(idx);
         }
     }
 
@@ -727,6 +786,13 @@ pub fn replay_full(cards_values: &[u8], actions_packed: &[u8], bet_atomic: u64) 
         .map(|h| h.cards.clone())
         .unwrap_or_default();
     let dealer_cards = st.dealer_cards.clone();
+    let first_card_indices = st.first.idxs.clone();
+    let second_card_indices = st
+        .second
+        .as_ref()
+        .map(|h| h.idxs.clone())
+        .unwrap_or_default();
+    let dealer_card_indices = st.dealer_idxs.clone();
     // Terminal per-hand kinds for the display layer (frontend active-hand
     // highlight). A closed hand always ends as KIND_STAND; the second hand's
     // kind is meaningless without a split, so report bet (0) then.
@@ -766,6 +832,9 @@ pub fn replay_full(cards_values: &[u8], actions_packed: &[u8], bet_atomic: u64) 
         first_cards,
         second_cards,
         dealer_cards,
+        first_card_indices,
+        second_card_indices,
+        dealer_card_indices,
     }
 }
 
@@ -812,5 +881,54 @@ mod tests {
         let a = deal_shoe(&swaps);
         assert_eq!(a, deal_shoe(&swaps), "deterministic");
         assert!(a.iter().all(|&c| (c as usize) < 13), "rank codes 0..12");
+    }
+
+    #[test]
+    fn deal_shoe_with_suits_matches_deal_shoe() {
+        let swaps: [u64; MAX_CARDS] = core::array::from_fn(|k| (k as u64) * 2_654_435_761);
+        let (ranks, suits) = deal_shoe_with_suits(&swaps);
+        assert_eq!(ranks, deal_shoe(&swaps), "rank output must stay consensus-identical");
+        assert!(suits.iter().all(|&s| s < 4), "suit codes 0..3");
+
+        // Zero randomness ⇒ unshuffled layout: rank (i%52)/4, suit (i%52)%4.
+        let (r0, s0) = deal_shoe_with_suits(&[0u64; MAX_CARDS]);
+        for i in 0..MAX_CARDS {
+            assert_eq!(r0[i], shoe_layout_code(i));
+            assert_eq!(s0[i], shoe_layout_suit(i));
+        }
+    }
+
+    #[test]
+    fn replay_reports_shoe_indices_of_each_card() {
+        // Player [10,10]=20 stands; dealer up 8, hole 9 → 17, no draws.
+        let deck = {
+            let mut d = [0u8; MAX_CARDS];
+            d[..4].copy_from_slice(&[9, 9, 7, 8]);
+            d
+        };
+        let r = replay_full(&deck, &[ACTION_STAND], 1_000_000);
+        assert_eq!(r.first_card_indices, vec![0, 1]);
+        assert_eq!(r.dealer_card_indices, vec![2, 3]);
+
+        // Split: [5,5] vs dealer 6/10. cards_count = 4, so the first hand keeps
+        // shoe card 1 and draws 4; the second hand takes shoe cards 0 and 5.
+        let deck = {
+            let mut d = [0u8; MAX_CARDS];
+            //             p0 p1 up hole s1 s2 dealer draws...
+            d[..8].copy_from_slice(&[4, 4, 5, 9, 8, 7, 9, 9]);
+            d
+        };
+        let r = replay_full(&deck, &[ACTION_SPLIT, ACTION_STAND, ACTION_STAND], 1_000_000);
+        assert_eq!(r.num_hands, 2);
+        assert_eq!(r.first_cards, vec![deck[1], deck[4]]);
+        assert_eq!(r.first_card_indices, vec![1, 4]);
+        assert_eq!(r.second_cards, vec![deck[0], deck[5]]);
+        assert_eq!(r.second_card_indices, vec![0, 5]);
+        assert_eq!(r.dealer_cards[..2], [deck[2], deck[3]]);
+        assert_eq!(r.dealer_card_indices[..2], [2, 3]);
+        // Any dealer draws continue from the shared frontier.
+        for (n, &idx) in r.dealer_card_indices[2..].iter().enumerate() {
+            assert_eq!(idx as usize, 6 + n);
+        }
     }
 }
