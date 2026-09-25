@@ -13,8 +13,9 @@
 //! Rules (from `blackjack.rs`): 8 decks, fresh shuffle each round (no counting
 //! edge), dealer stands on 17 incl. soft 17 (S17), blackjack pays 3:2 (2.5×),
 //! double + one split + double-after-split, 10-card charlie, no surrender, no
-//! resplit. Insurance is always declined (basic strategy), so the game plays
-//! effectively no-peek — a minor source of error vs. a peek game.
+//! resplit. Insurance is ALWAYS taken whenever it is offered (dealer shows an
+//! Ace) — the classic "always insure" line, which is a losing side bet without
+//! card counting and therefore lowers the RTP vs. basic strategy.
 //!
 //! Run:
 //!   cargo run --release --example blackjack_rtp -- [rounds] [seed]
@@ -24,8 +25,8 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use rolly_game_core::blackjack::{
-    deal_shoe, replay_full, BlackjackResult, ACTION_DOUBLE, ACTION_HIT, ACTION_SPLIT, ACTION_STAND,
-    MAX_CARDS,
+    deal_shoe, replay_full, BlackjackResult, ACTION_DOUBLE, ACTION_HIT, ACTION_INSURANCE_ACCEPT,
+    ACTION_SPLIT, ACTION_STAND, MAX_CARDS,
 };
 
 /// Hard value of a rank code (Ace = 1 here; soft handling is separate).
@@ -199,6 +200,14 @@ fn play_round(shoe: &[u8; MAX_CARDS], base: u64) -> BlackjackResult {
     let mut active = 0usize; // 0 = first hand, 1 = second (after split)
     let mut has_split = false;
 
+    // Always take insurance when the dealer's up-card is an Ace (shoe[2] == 0):
+    // insurance is only offered on a dealer Ace, and this is the "always insure"
+    // line. The engine peeks the hole card on this action — if the dealer has a
+    // natural, the round settles immediately with the 2:1 insurance payout.
+    if shoe[2] == 0 {
+        actions.push(ACTION_INSURANCE_ACCEPT);
+    }
+
     loop {
         let res = replay_full(shoe, &actions, base);
         if res.is_finished {
@@ -262,6 +271,7 @@ fn main() {
     let mut total_staked: u128 = 0;
     let (mut counted, mut skipped) = (0u64, 0u64);
     let (mut wins, mut pushes, mut losses, mut naturals) = (0u64, 0u64, 0u64, 0u64);
+    let mut insured = 0u64;
 
     for _ in 0..rounds {
         let swaps: [u64; MAX_CARDS] = core::array::from_fn(|_| rng.gen());
@@ -283,6 +293,9 @@ fn main() {
                 if r.num_hands == 1 && r.first_points == 21 && r.first_cards.len() == 2 {
                     naturals += 1;
                 }
+                if r.insurance_taken {
+                    insured += 1;
+                }
             }
             Err(_) => skipped += 1,
         }
@@ -294,7 +307,7 @@ fn main() {
     let pct = |x: u64| 100.0 * x as f64 / counted.max(1) as f64;
 
     println!("Blackjack RTP — Monte-Carlo over {counted} rounds (seed {seed})");
-    println!("  rules: 8 decks · S17 · BJ 3:2 · DAS · 1 split · charlie · no surrender · basic strategy");
+    println!("  rules: 8 decks · S17 · BJ 3:2 · DAS · 1 split · charlie · no surrender · basic strategy · ALWAYS insure");
     println!("  RTP         : {:.4}%", rtp * 100.0);
     println!("  house edge  : {:.4}%", (1.0 - rtp) * 100.0);
     println!(
@@ -310,6 +323,7 @@ fn main() {
         pct(losses),
         pct(naturals)
     );
+    println!("  insured     : {:.2}% of rounds (dealer Ace up)", pct(insured));
     if skipped > 0 {
         println!("  skipped     : {skipped} rounds (needed > {MAX_CARDS} cards)");
     }
