@@ -201,6 +201,7 @@ fn payout_max_win_cap() {
     let random = [0u64, 0, 0, 0]; // drawn = {0..9}
     let selected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // 10 matches
     // low risk pick 10: 1000x (10_000_000)
+    // 100 USDT * 1000x = 100000 USDT: raw win equals MAX_WIN exactly (cap boundary)
     let payout = compute_payout(&random, 100 * USDT_DECIMALS, 0, &selected);
     assert_eq!(payout.multiplier, 10_000_000);
     assert_eq!(payout.win_amount, MAX_WIN);
@@ -329,7 +330,7 @@ fn fuzz_payout_100_per_config() {
             let table = get_multiplier_table(risk, picks).unwrap();
             for _ in 0..100 {
                 let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-                let bet: u64 = rng.gen_range(10_000..=700_000_000);
+                let bet: u64 = rng.gen_range(10_000..=10_000_000_000);
 
                 let mut nums: Vec<u8> = (0..NUMBERS_RANGE as u8).collect();
                 nums.shuffle(&mut rng);
@@ -406,7 +407,7 @@ fn rtp_simulation_keno() {
         let max_bet = if max_multi > 0 {
             (MAX_WIN as u128 * PAYOUT_DIVISOR as u128 / max_multi as u128) as u64
         } else {
-            700_000_000
+            10_000_000_000
         };
         let bet: u64 = rng.gen_range(10_000..=max_bet.max(10_000));
 

@@ -156,7 +156,7 @@ fn zero_bet_zero_win() {
 
 #[test]
 fn u128_no_overflow_max_scenario() {
-    let bet = 700 * USDT_DECIMALS;
+    let bet = 10_000 * USDT_DECIMALS;
     let raw = (bet as u128 * MAX_MULTI_X100 as u128) / CRASH_PAYOUT_DIVISOR as u128;
     assert!(raw < u64::MAX as u128);
 }
@@ -281,7 +281,7 @@ mod rtp_simulation {
 
         for _ in 0..n {
             let cashout = rng.gen_range(MIN_CASHOUT_X100 as u32..=10_000u32);
-            let bet: u64 = rng.gen_range(10_000..=700_000_000);
+            let bet: u64 = rng.gen_range(10_000..=10_000_000_000);
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
 
             let crash_x100 = crash_point_from_random(&random);

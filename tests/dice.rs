@@ -176,7 +176,7 @@ fn max_win_cap_applied() {
     // Under with prediction=[1] → wn=1, multi=990x → raw = 700*990 = 693000 USDT
     let payout = compute_payout(&random, bet, DiceMode::Under, [1, 0]);
     assert!(payout.is_win);
-    assert_eq!(payout.win_amount, MAX_WIN); // capped at 10000 USDT
+    assert_eq!(payout.win_amount, MAX_WIN); // capped at 100000 USDT
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn below_max_win_not_capped() {
     let random = random_with_roll(0);
     let payout = compute_payout(&random, bet, DiceMode::Under, [1, 0]);
     assert!(payout.is_win);
-    // 10 USDT * 990x = 9900 USDT < 10000 cap
+    // 10 USDT * 990x = 9900 USDT < 100000 cap
     let expected = (10u64 * USDT_DECIMALS as u64 * 9_900_000) / 10_000;
     assert_eq!(payout.win_amount, expected);
     assert!(payout.win_amount < MAX_WIN);
@@ -205,13 +205,13 @@ fn zero_win_on_lose() {
 
 #[test]
 fn u128_no_overflow_max_scenario() {
-    // max_bet=700 USDT, max_multi=990x (wn=1)
-    let bet = 700 * USDT_DECIMALS;
+    // max_bet=10000 USDT, max_multi=990x (wn=1)
+    let bet = 10_000 * USDT_DECIMALS;
     let multi = multiplier(1); // 9_900_000
     let raw = (bet as u128 * multi as u128) / 10_000;
-    // 700_000_000 * 9_900_000 / 10_000 = 693_000_000_000 — fits u64 easily
+    // 10_000_000_000 * 9_900_000 / 10_000 = 9_900_000_000_000 — fits u64 easily
     assert!(raw < u64::MAX as u128);
-    assert_eq!(raw, 693_000_000_000u128);
+    assert_eq!(raw, 9_900_000_000_000u128);
 }
 
 // ─── Full payout integration ──────────────────────────────────
@@ -336,7 +336,7 @@ mod rtp_simulation {
     }
 
     fn random_bet_atomic(rng: &mut StdRng) -> u64 {
-        rng.gen_range(10_000..=700_000_000) // 0.01 USDT .. 700 USDT
+        rng.gen_range(10_000..=10_000_000_000) // 0.01 USDT .. 10000 USDT
     }
 
     fn random_poseidon2_output(rng: &mut StdRng) -> [u64; 4] {

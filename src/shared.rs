@@ -6,8 +6,8 @@ pub const USDT_DECIMALS: u64 = 1_000_000;
 /// All multiplier values are scaled ×10000 (e.g. 19800 = 1.9800x).
 pub const PAYOUT_DIVISOR: u64 = 10_000;
 
-/// Maximum win amount per bet in atomic units (10 000 USDT).
-pub const MAX_WIN: u64 = 10_000 * USDT_DECIMALS;
+/// Maximum win amount per bet in atomic units (100 000 USDT).
+pub const MAX_WIN: u64 = 100_000 * USDT_DECIMALS;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
