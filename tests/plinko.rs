@@ -215,7 +215,7 @@ fn max_win_cap_extreme() {
     // extreme sector 2 rows 16, bucket 0: 10000x multiplier
     let payout = compute_payout(&random, 100 * USDT_DECIMALS, 2, 16, true);
     assert_eq!(payout.multiplier, 100_000_000);
-    // 100 USDT * 10000x = 1_000_000 USDT >> MAX_WIN (10000 USDT)
+    // 100 USDT * 10000x = 1_000_000 USDT >> MAX_WIN (100000 USDT)
     assert_eq!(payout.win_amount, MAX_WIN);
 }
 
@@ -244,13 +244,13 @@ fn integer_floor_division() {
 
 #[test]
 fn u128_no_overflow_max_scenario() {
-    // max bet = 700 USDT, max multi = 100_000_000 (extreme 10000x)
-    let bet = 700 * USDT_DECIMALS;
+    // max bet = 10000 USDT, max multi = 100_000_000 (extreme 10000x)
+    let bet = 10_000 * USDT_DECIMALS;
     let multi: u64 = 100_000_000;
     let raw = bet as u128 * multi as u128 / PAYOUT_DIVISOR as u128;
-    // 700_000_000 * 100_000_000 / 10_000 = 7_000_000_000_000
+    // 10_000_000_000 * 100_000_000 / 10_000 = 100_000_000_000_000
     assert!(raw < u64::MAX as u128);
-    assert_eq!(raw, 7_000_000_000_000u128);
+    assert_eq!(raw, 100_000_000_000_000u128);
 }
 
 // ── is_win semantics ───────────────────────────────────────────
@@ -290,11 +290,11 @@ fn golden_sector1_rows16_bucket8() {
 #[test]
 fn golden_sector2_rows16_extreme_bucket0() {
     let random = random_with_bits(0);
-    let payout = compute_payout(&random, 1 * USDT_DECIMALS, 2, 16, true);
+    let payout = compute_payout(&random, 10 * USDT_DECIMALS, 2, 16, true);
     assert_eq!(payout.roll_number, 0);
     assert_eq!(payout.multiplier, 100_000_000);
     assert!(payout.is_win);
-    // 1_000_000 * 100_000_000 / 10000 = 10_000_000_000 = MAX_WIN exactly
+    // 10_000_000 * 100_000_000 / 10000 = 100_000_000_000 = MAX_WIN exactly
     assert_eq!(payout.win_amount, MAX_WIN);
 }
 
@@ -309,7 +309,7 @@ fn fuzz_all_configs_100_random() {
     for (sector, rows, is_extreme, table) in all_multiplier_rows() {
         for _ in 0..100 {
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
-            let bet: u64 = rng.gen_range(10_000..=700_000_000);
+            let bet: u64 = rng.gen_range(10_000..=10_000_000_000);
 
             let payout = compute_payout(&random, bet, sector, rows, is_extreme);
 
@@ -377,7 +377,7 @@ fn rtp_simulation_plinko() {
         let max_bet = if max_multi > 0 {
             (MAX_WIN as u128 * PAYOUT_DIVISOR as u128 / max_multi as u128) as u64
         } else {
-            700_000_000
+            10_000_000_000
         };
         let bet: u64 = rng.gen_range(10_000..=max_bet.max(10_000));
         let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];

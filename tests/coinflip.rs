@@ -75,7 +75,7 @@ fn prediction_1_roll_0_loses() {
 
 #[test]
 fn max_win_cap_applied() {
-    let bet = 6_000 * USDT_DECIMALS; // 6000 * 1.98 = 11880 > 10000
+    let bet = 60_000 * USDT_DECIMALS; // 60000 * 1.98 = 118800 > 100000
     let random = random_with_roll(0);
     let payout = compute_payout(&random, bet, 0);
     assert!(payout.is_win);
@@ -106,11 +106,11 @@ fn zero_win_on_loss() {
 
 #[test]
 fn u128_no_overflow_max_scenario() {
-    let bet = 700 * USDT_DECIMALS;
+    let bet = 10_000 * USDT_DECIMALS;
     let raw = (bet as u128 * MULTIPLIER as u128) / PAYOUT_DIVISOR as u128;
     assert!(raw < u64::MAX as u128);
-    // 700_000_000 * 19800 / 10000 = 1_386_000_000
-    assert_eq!(raw, 1_386_000_000u128);
+    // 10_000_000_000 * 19800 / 10000 = 19_800_000_000
+    assert_eq!(raw, 19_800_000_000u128);
 }
 
 // ── Floor division ───────────────────────────────────────────
@@ -183,7 +183,7 @@ mod rtp_simulation {
 
         for _ in 0..n {
             let prediction: u8 = rng.gen_range(0..=1);
-            let bet: u64 = rng.gen_range(10_000..=700_000_000);
+            let bet: u64 = rng.gen_range(10_000..=10_000_000_000);
             let random: [u64; 4] = [rng.gen(), rng.gen(), rng.gen(), rng.gen()];
 
             let roll = roll_from_random(&random);
